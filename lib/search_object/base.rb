@@ -3,9 +3,11 @@ module SearchObject
     def self.included(base)
       base.extend ClassMethods
       base.instance_eval do
-        @defaults = {}
-        @actions  = {}
-        @scope    = nil
+        @config = {
+          defaults:  {},
+          actions:   {},
+          scope:     nil,
+        }
       end
     end
 
@@ -41,34 +43,30 @@ module SearchObject
 
     module ClassMethods
       def inherited(base)
-        scope    = self.instance_variable_get "@scope"
-        defaults = self.instance_variable_get "@defaults"
-        actions  = self.instance_variable_get "@actions"
+        config = self.instance_variable_get "@config"
 
         base.instance_eval do
-          @defaults = defaults.dup
-          @actions  = actions.dup
-          @scope    = scope ? scope.dup : nil
+          @config = config.dup
         end
       end
 
       # :api: private
       def build_internal_search(options)
-        scope  = options.fetch(:scope) { @scope && @scope.call } or raise MissingScopeError
-        params = @defaults.merge Helper.select_keys(Helper.stringify_keys(options.fetch(:filters, {})), @actions.keys)
+        scope  = options.fetch(:scope) { @config[:scope] && @config[:scope].call } or raise MissingScopeError
+        params = @config[:defaults].merge Helper.select_keys(Helper.stringify_keys(options.fetch(:filters, {})), @config[:actions].keys)
 
-        Search.new scope, params, @actions
+        Search.new scope, params, @config[:actions]
       end
 
       def scope(&block)
-        @scope = block
+        @config[:scope] = block
       end
 
       def option(name, default = nil, &block)
         name = name.to_s
 
-        @defaults[name] = default unless default.nil?
-        @actions[name]  = block || ->(scope, value) { scope.where name => value unless value.blank? }
+        @config[:defaults][name] = default unless default.nil?
+        @config[:actions][name]  = block || ->(scope, value) { scope.where name => value unless value.blank? }
 
         define_method(name) { @search.param name }
       end
